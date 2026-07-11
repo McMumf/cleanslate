@@ -1,5 +1,33 @@
 #!/bin/bash
 
+# Function to detect available container runtime
+detect_container_runtime() {
+    if command -v podman &> /dev/null; then
+        echo "podman"
+    elif command -v docker &> /dev/null; then
+        echo "docker"
+    else
+        echo "error" >&2
+        echo "Neither podman nor docker found. Please install one of them." >&2
+        exit 1
+    fi
+}
+
+# Detect which container runtime to use
+CONTAINER_RUNTIME=$(detect_container_runtime)
+
+# Set compose command based on detected runtime
+if [[ "$CONTAINER_RUNTIME" == "podman" ]]; then
+    COMPOSE_CMD="$CONTAINER_RUNTIME compose -f docker-compose.yml"
+    COMPOSE_DEV_CMD="$CONTAINER_RUNTIME compose -f docker-compose-dev.yml"
+else
+    COMPOSE_CMD="$CONTAINER_RUNTIME compose -f docker-compose.yml"
+    COMPOSE_DEV_CMD="$CONTAINER_RUNTIME compose -f docker-compose-dev.yml"
+fi
+
+# Set the container runtime for use in commands below
+export CONTAINER_RUNTIME
+
 if [[ $CI != "true" ]]; then
 
 echo "=> Kill the local version of Clean Slate..."
@@ -21,7 +49,7 @@ if [ "$FIREBASE" != "true" ]; then
   export JWT_SIGNING_SECRET="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 fi
 
-docker compose -f docker-compose.yml down -t 0 --remove-orphans
+$COMPOSE_CMD down -t 0 --remove-orphans
 
 fi
 
@@ -44,11 +72,11 @@ if [[ $CI != "true" ]]; then
   export NEXT_PUBLIC_LOGIN_WITH_GITHUB="true"
   export NEXT_PUBLIC_LOGIN_WITH_GOOGLE="true"
   export NODE_ENV="development"
-  
+
 
   if [[ $FIREBASE == "true" ]]; then
 
-    abspath() {                                               
+    abspath() {
       cd "$(dirname "$1")"
       printf "%s/%s\n" "$(pwd)" "$(basename "$1")"
       cd "$OLDPWD"
@@ -64,8 +92,8 @@ if [[ $CI != "true" ]]; then
 
 
   echo "=> Spin up PostgreSQL and Hasura..."
-  docker compose -f docker-compose-dev.yml down -v --remove-orphans -t 0
-  docker compose -f docker-compose-dev.yml pull && docker compose -f docker-compose-dev.yml up -d
+  $COMPOSE_DEV_CMD down -v --remove-orphans -t 0
+  $COMPOSE_DEV_CMD pull && $COMPOSE_DEV_CMD up -d
 
   echo "=> Wait for five seconds for Hasura to get ready..."
   sleep 5;
@@ -80,5 +108,5 @@ fi
 
 # Start the server!
 
-(cd src && ((npx next dev --webpack) & (npx nodemon server.js))) & sleep 5 
+(cd src && ((npx next dev --webpack) & (npx nodemon server.js))) & sleep 5
 sudo caddy start -c Caddyfile.dev --adapter caddyfile

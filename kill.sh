@@ -1,3 +1,5 @@
+#!/bin/bash
+
 pkill -9 -f "hasura console"
 pkill -9 -f "next dev"
 pkill -9 -f "next-router-worker"
